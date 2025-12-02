@@ -1,7 +1,7 @@
 .hero {
   --gradient-start: rgb(var(--color-dark-base) / 80%);
   --gradient-end: rgb(var(--color-dark-base) / 20%);
-  --default-min-height: 360px;
+  --default-min-height: 650px;
   --min-height: var(--default-min-height);
 
   position: relative;
