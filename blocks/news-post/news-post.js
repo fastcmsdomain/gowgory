@@ -34,6 +34,7 @@ function el(tag, attrs = {}, ...children) {
 }
 
 function formatDate(dateString) {
+  if (!dateString) return '';
   const date = new Date(dateString);
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
@@ -92,6 +93,21 @@ function renderFallback(block, backLabel, backPath, sourceLabel, sourceUrl) {
     actions,
   );
   block.appendChild(fallback);
+}
+
+function getArticleFromParams(sourceUrl) {
+  const params = new URLSearchParams(window.location.search);
+  if (!sourceUrl) return null;
+
+  return {
+    url: sourceUrl,
+    title: params.get('title') || '',
+    description: params.get('description') || '',
+    content: params.get('content') || '',
+    image: params.get('image') || '',
+    publishedAt: params.get('publishedAt') || '',
+    source: { name: params.get('sourceName') || '' },
+  };
 }
 
 function renderArticle(block, article, backLabel, backPath, sourceLabel) {
@@ -161,6 +177,10 @@ export default function decorate(block) {
     if (stored) article = JSON.parse(stored);
   } catch {
     // sessionStorage unavailable
+  }
+
+  if (!article) {
+    article = getArticleFromParams(sourceUrl);
   }
 
   if (article) {

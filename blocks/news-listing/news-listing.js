@@ -1,9 +1,8 @@
-const API_KEY = 'fa8be279f005e9112d5f0b27b8dfc93a';
-const API_BASE = 'https://gnews.io/api/v4';
 const ARTICLES_PER_FETCH = 10;
 const INITIAL_ROWS = 4;
 const COLUMNS = 4;
 const INITIAL_CARDS = INITIAL_ROWS * COLUMNS;
+const LOCAL_PROXY_ORIGIN = 'http://127.0.0.1:8787';
 
 const CATEGORIES = Object.freeze([
   { label: 'All', query: 'artificial intelligence OR robotics OR marketing' },
@@ -63,17 +62,15 @@ async function fetchNews(query, page = 1) {
   const cacheKey = `${query}-${page}`;
   if (cache.has(cacheKey)) return cache.get(cacheKey);
 
-  const params = new URLSearchParams({
-    q: query,
-    lang: 'en',
-    max: String(ARTICLES_PER_FETCH),
-    page: String(page),
-    apikey: API_KEY,
-  });
+  const url = new URL('/api/news', window.location.hostname === 'localhost'
+    ? LOCAL_PROXY_ORIGIN
+    : window.location.origin);
+  url.searchParams.set('query', query);
+  url.searchParams.set('lang', 'en');
+  url.searchParams.set('max', String(ARTICLES_PER_FETCH));
+  url.searchParams.set('page', String(page));
 
-  const url = `${API_BASE}/search?${params.toString()}`;
-
-  const response = await fetch(url);
+  const response = await fetch(url.toString());
   if (!response.ok) {
     throw new Error(`API error: ${response.status}`);
   }
@@ -95,7 +92,14 @@ function storeArticle(article) {
 }
 
 function createCard(article, postPagePath) {
-  const href = `${postPagePath}?source=${encodeURIComponent(article.url)}`;
+  const href = new URL(postPagePath, window.location.origin);
+  href.searchParams.set('source', article.url);
+  href.searchParams.set('title', article.title || '');
+  href.searchParams.set('description', article.description || '');
+  href.searchParams.set('content', article.content || '');
+  href.searchParams.set('image', article.image || '');
+  href.searchParams.set('publishedAt', article.publishedAt || '');
+  href.searchParams.set('sourceName', article.source?.name || '');
 
   const imageEl = article.image
     ? el('img', { src: article.image, alt: article.title, loading: 'lazy' })
@@ -106,7 +110,7 @@ function createCard(article, postPagePath) {
     {},
     el(
       'a',
-      { href, class: 'news-card-link' },
+      { href: `${href.pathname}${href.search}`, class: 'news-card-link' },
       el('div', { class: 'news-card-image' }, imageEl),
       el(
         'div',

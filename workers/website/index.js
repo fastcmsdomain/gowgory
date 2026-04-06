@@ -18,7 +18,6 @@ const getExtension = (path) => {
 
 const isMediaRequest = (url) => /\/media_[0-9a-f]{40,}[/a-zA-Z0-9_-]*\.[0-9a-z]+$/.test(url.pathname);
 const isRUMRequest = (url) => /\/\.(rum|optel)\/.*/.test(url.pathname);
-const NEWS_TOPICS = ['AI', 'robotics', 'technology', 'innovation'];
 const NEWS_MAX_PAGE_SIZE = 4;
 const NEWS_ALLOWED_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
@@ -87,7 +86,8 @@ const getNewsResponse = async (request, url, env) => {
     }));
   }
 
-  const topic = url.searchParams.get('topic') || NEWS_TOPICS[0];
+  const topic = url.searchParams.get('topic') || '';
+  const query = url.searchParams.get('query') || topic || 'technology';
   const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
   const max = Math.min(
     NEWS_MAX_PAGE_SIZE,
@@ -96,7 +96,7 @@ const getNewsResponse = async (request, url, env) => {
   const lang = url.searchParams.get('lang') || 'en';
   const country = url.searchParams.get('country') || 'us';
 
-  if (!NEWS_TOPICS.includes(topic)) {
+  if (!query || query.length > 120) {
     return appendNewsCorsHeaders(request, new Response(JSON.stringify({ error: 'Unsupported topic.' }), {
       status: 400,
       headers: { 'content-type': 'application/json' },
@@ -104,7 +104,7 @@ const getNewsResponse = async (request, url, env) => {
   }
 
   const newsUrl = new URL('https://gnews.io/api/v4/search');
-  newsUrl.searchParams.set('q', topic);
+  newsUrl.searchParams.set('q', query);
   newsUrl.searchParams.set('lang', lang);
   newsUrl.searchParams.set('country', country);
   newsUrl.searchParams.set('page', page);
