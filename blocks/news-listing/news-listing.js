@@ -22,12 +22,14 @@ function extractBlockFields(block) {
   const titleRow = rows[0];
   const descRow = rows[1];
   const pathRow = rows[2];
+  const apiOriginRow = rows[3];
   const fields = {
     title: titleRow?.textContent?.trim() || '',
     description: descRow?.textContent?.trim() || '',
     postPagePath: pathRow?.textContent?.trim() || '',
+    apiOrigin: apiOriginRow?.textContent?.trim() || '',
   };
-  [titleRow, descRow, pathRow].forEach((row) => row?.remove());
+  [titleRow, descRow, pathRow, apiOriginRow].forEach((row) => row?.remove());
   block.textContent = '';
   return fields;
 }
@@ -58,13 +60,11 @@ function formatDate(dateString) {
   });
 }
 
-async function fetchNews(query, page = 1) {
-  const cacheKey = `${query}-${page}`;
+async function fetchNewsWithOrigin(query, page = 1, apiOrigin = '') {
+  const cacheKey = `${apiOrigin}-${query}-${page}`;
   if (cache.has(cacheKey)) return cache.get(cacheKey);
 
-  const url = new URL('/api/news', window.location.hostname === 'localhost'
-    ? LOCAL_PROXY_ORIGIN
-    : window.location.origin);
+  const url = new URL('/api/news', apiOrigin);
   url.searchParams.set('query', query);
   url.searchParams.set('lang', 'en');
   url.searchParams.set('max', String(ARTICLES_PER_FETCH));
@@ -78,6 +78,23 @@ async function fetchNews(query, page = 1) {
   const data = await response.json();
   cache.set(cacheKey, data.articles || []);
   return data.articles || [];
+}
+
+function getApiOrigin(authoredOrigin = '') {
+  if (authoredOrigin) {
+    return authoredOrigin.replace(/\/$/, '');
+  }
+
+  if (window.location.hostname === 'localhost') {
+    return LOCAL_PROXY_ORIGIN;
+  }
+
+  return window.location.origin;
+}
+
+function needsExplicitApiOrigin(authoredOrigin = '') {
+  const { hostname } = window.location;
+  return !authoredOrigin && (hostname.endsWith('.aem.page') || hostname.endsWith('.aem.live'));
 }
 
 function storeArticle(article) {
@@ -208,6 +225,7 @@ export default async function decorate(block) {
   const titleText = fields.title || 'Latest News';
   const descriptionText = fields.description || 'Stay up to date with the latest news in technology and innovation.';
   const postPagePath = fields.postPagePath || '/news/post';
+  const apiOrigin = getApiOrigin(fields.apiOrigin);
 
   if (isUE()) {
     renderPlaceholder(block, titleText, descriptionText);
@@ -279,7 +297,7 @@ export default async function decorate(block) {
     showSpinner();
 
     try {
-      const articles = await fetchNews(currentQuery, currentPage);
+      const articles = await fetchNewsWithOrigin(currentQuery, currentPage, apiOrigin);
       if (articles.length === 0) {
         hasMore = false;
         hideSpinner();
@@ -361,12 +379,19 @@ export default async function decorate(block) {
 
   block.append(header, filters, skeleton, grid, sentinel);
 
+  if (needsExplicitApiOrigin(fields.apiOrigin)) {
+    skeleton.remove();
+    hideSpinner();
+    grid.after(createMessage('Add an "API Origin" row to this block for aem.page/aem.live preview.'));
+    return;
+  }
+
   // Initial load
   try {
     while (hasMore && allArticles.length < INITIAL_CARDS) {
       isLoading = true;
       // eslint-disable-next-line no-await-in-loop
-      const articles = await fetchNews(currentQuery, currentPage);
+      const articles = await fetchNewsWithOrigin(currentQuery, currentPage, apiOrigin);
       if (articles.length === 0) {
         hasMore = false;
       } else {
