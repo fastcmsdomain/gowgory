@@ -2,6 +2,8 @@
 coverage/
 logs/
 node_modules/
+.env*
+.dev.vars*
 
 helix-importer-ui
 .DS_Store

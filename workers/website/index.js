@@ -18,6 +18,9 @@ const getExtension = (path) => {
 
 const isMediaRequest = (url) => /\/media_[0-9a-f]{40,}[/a-zA-Z0-9_-]*\.[0-9a-z]+$/.test(url.pathname);
 const isRUMRequest = (url) => /\/\.(rum|optel)\/.*/.test(url.pathname);
+const NEWS_TOPICS = ['AI', 'robotics', 'technology', 'innovation'];
+const NEWS_MAX_PAGE_SIZE = 4;
+const NEWS_ALLOWED_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
 const getDraft = (url) => {
   if (!url.pathname.startsWith('/drafts/')) return null;
@@ -48,6 +51,76 @@ const getRUMRequest = (request, url) => {
   if (!isRUMRequest(url)) return null;
   if (['GET', 'POST', 'OPTIONS'].includes(request.method)) return null;
   return new Response('Method Not Allowed', { status: 405 });
+};
+
+const appendNewsCorsHeaders = (request, response) => {
+  const headers = new Headers(response.headers);
+  const origin = request.headers.get('origin');
+  const allowedOrigin = NEWS_ALLOWED_ORIGINS.includes(origin) ? origin : '*';
+  headers.set('access-control-allow-origin', allowedOrigin);
+  headers.set('access-control-allow-methods', 'GET, OPTIONS');
+  headers.set('access-control-allow-headers', 'Content-Type');
+  headers.set('vary', 'Origin');
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+};
+
+const getNewsOptionsResponse = (request, url) => {
+  if (!(url.pathname === '/api/news' && request.method === 'OPTIONS')) return null;
+  return appendNewsCorsHeaders(request, new Response(null, { status: 204 }));
+};
+
+const getNewsResponse = async (request, url, env) => {
+  if (url.pathname !== '/api/news') return null;
+  if (!['GET', 'OPTIONS'].includes(request.method)) {
+    return appendNewsCorsHeaders(request, new Response('Method Not Allowed', { status: 405 }));
+  }
+
+  if (!env.GNEWS_API_KEY) {
+    return appendNewsCorsHeaders(request, new Response(JSON.stringify({ error: 'Missing GNEWS_API_KEY in worker environment.' }), {
+      status: 500,
+      headers: { 'content-type': 'application/json' },
+    }));
+  }
+
+  const topic = url.searchParams.get('topic') || NEWS_TOPICS[0];
+  const page = Math.max(1, Number.parseInt(url.searchParams.get('page') || '1', 10) || 1);
+  const max = Math.min(
+    NEWS_MAX_PAGE_SIZE,
+    Math.max(1, Number.parseInt(url.searchParams.get('max') || `${NEWS_MAX_PAGE_SIZE}`, 10) || NEWS_MAX_PAGE_SIZE),
+  );
+  const lang = url.searchParams.get('lang') || 'en';
+  const country = url.searchParams.get('country') || 'us';
+
+  if (!NEWS_TOPICS.includes(topic)) {
+    return appendNewsCorsHeaders(request, new Response(JSON.stringify({ error: 'Unsupported topic.' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    }));
+  }
+
+  const newsUrl = new URL('https://gnews.io/api/v4/search');
+  newsUrl.searchParams.set('q', topic);
+  newsUrl.searchParams.set('lang', lang);
+  newsUrl.searchParams.set('country', country);
+  newsUrl.searchParams.set('page', page);
+  newsUrl.searchParams.set('max', max);
+  newsUrl.searchParams.set('apikey', env.GNEWS_API_KEY);
+
+  const response = await fetch(newsUrl.toString(), { headers: { accept: 'application/json' } });
+
+  return appendNewsCorsHeaders(request, new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: {
+      'content-type': response.headers.get('content-type') || 'application/json',
+      'cache-control': 'public, max-age=300',
+    },
+  }));
 };
 
 const formatSearchParams = (url) => {
@@ -134,6 +207,12 @@ const fetchFromOrigin = async (req, cacheEverything, savedSearch) => {
 export default {
   async fetch(req, env) {
     const url = new URL(req.url);
+
+    const newsOptionsResp = getNewsOptionsResponse(req, url);
+    if (newsOptionsResp) return newsOptionsResp;
+
+    const newsResp = await getNewsResponse(req, url, env);
+    if (newsResp) return newsResp;
 
     const draftResp = getDraft(url);
     if (draftResp) return draftResp;

@@ -27,19 +27,15 @@
           the fixed filters AI, Robotics, Technology, and Innovation.
         </p>
         <p>
-          The GNews API key is exposed in client-side code on a public site. For a
-          production setup, prefer a server-side proxy. This example keeps the
-          authoring simple for local testing.
+          The GNews API key is now expected in the worker environment, not in block
+          authoring. Configure it in <code>workers/website/.env</code> for local
+          development and as a Worker secret for deployment.
         </p>
 
         <div class="news">
           <div>
             <div>Heading</div>
             <div>Recent News</div>
-          </div>
-          <div>
-            <div>API Key</div>
-            <div>replace-with-your-gnews-api-key</div>
           </div>
           <div>
             <div>Language</div>
@@ -63,7 +59,6 @@
           The block ignores extra rows it does not understand.
         </p>
         <p>
-          Required row: <strong>API Key</strong>.
           Optional rows: <strong>Heading</strong>, <strong>Language</strong>,
           <strong>Country</strong>, and <strong>Button Label</strong>.
         </p>

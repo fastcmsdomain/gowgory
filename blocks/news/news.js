@@ -14,6 +14,8 @@ const DEFAULTS = {
   maxPages: 4,
 };
 
+const LOCAL_PROXY_ORIGIN = 'http://127.0.0.1:8787';
+
 function normalizeKey(text = '') {
   return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
 }
@@ -52,13 +54,20 @@ function createArticleLink(url, label, className) {
   return link;
 }
 
+function getApiOrigin() {
+  if (window.location.hostname === 'localhost') {
+    return LOCAL_PROXY_ORIGIN;
+  }
+
+  return window.location.origin;
+}
+
 function buildApiUrl(config, filter, page) {
-  const url = new URL('https://gnews.io/api/v4/search');
-  url.searchParams.set('q', filter.query);
+  const url = new URL('/api/news', getApiOrigin());
+  url.searchParams.set('topic', filter.query);
   url.searchParams.set('lang', config.language);
-  url.searchParams.set('max', DEFAULTS.pageSize);
+  url.searchParams.set('max', config.pageSize);
   url.searchParams.set('page', page);
-  url.searchParams.set('apikey', config.apiKey);
 
   if (config.country) {
     url.searchParams.set('country', config.country);
@@ -190,7 +199,7 @@ export default async function decorate(block) {
     buttonLabel: authoredConfig['button-label'] || DEFAULTS.buttonLabel,
     language: authoredConfig.language || DEFAULTS.language,
     country: authoredConfig.country || DEFAULTS.country,
-    apiKey: authoredConfig['api-key'] || '',
+    pageSize: DEFAULTS.pageSize,
   };
 
   const header = createElement('div', 'news-header');
@@ -212,16 +221,6 @@ export default async function decorate(block) {
   });
   controls.append(loadMore);
   block.replaceChildren(header, filters, grid, controls);
-
-  if (!config.apiKey) {
-    renderMessage(
-      grid,
-      'Add an "API Key" row to this block before the news feed can load.',
-      'is-error',
-    );
-    loadMore.hidden = true;
-    return;
-  }
 
   const state = {
     activeFilter: defaultFilter.query,
